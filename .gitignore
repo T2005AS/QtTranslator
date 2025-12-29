@@ -1,0 +1,18 @@
+# C++ binaries
+*.obj
+*.exe
+*.pdb
+*.ilk
+
+# Qt Creator / CMake build folders
+build/
+.cmake/
+CMakeCache.txt
+CMakeFiles/
+CMakeLists.txt.user
+Makefile
+cmake_install.cmake
+
+# Others
+*.db
+.qtc_clangd/
