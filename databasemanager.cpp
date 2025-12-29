@@ -37,3 +37,8 @@ bool DatabaseManager::addHistory(const QString &original, const QString &transla
     query.addBindValue(translated);
     return query.exec();
 }
+
+bool DatabaseManager::clearHistory() {
+    QSqlQuery query;
+    return query.exec("DELETE FROM history");
+}

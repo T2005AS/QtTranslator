@@ -11,6 +11,7 @@ public:
     static DatabaseManager& instance();
     bool initDatabase();
     bool addHistory(const QString &original, const QString &translated);
+    bool clearHistory();
 
 private:
     DatabaseManager() = default;
