@@ -18,6 +18,8 @@ add_executable(QtTranslator
     mainwindow.cpp
     databasemanager.h
     databasemanager.cpp
+    translator.h
+    translator.cpp
 )
 
 target_link_libraries(QtTranslator PRIVATE
