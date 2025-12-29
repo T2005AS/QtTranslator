@@ -2,6 +2,8 @@
 #include "databasemanager.h" // 引用数据库管理类
 #include <QtConcurrent>
 #include <QTimer>
+#include <QRandomGenerator>
+#include <QFutureWatcher>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -25,6 +27,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(searchEdit, &QLineEdit::returnPressed, this, &MainWindow::onSearchClicked); // 回车也能查
     connect(translator, &Translator::finished, this, &MainWindow::onTranslationFinished);
     connect(translator, &Translator::errorOccurred, this, &MainWindow::onTranslationError);
+    connect(clearButton, &QPushButton::clicked, this, &MainWindow::onClearClicked);
 
     this->setWindowTitle("智能翻译字典 - Qt6.9.2");
     this->resize(800, 600);
@@ -66,6 +69,9 @@ void MainWindow::setupUI()
     rightLayout->addWidget(new QLabel("搜索历史:"));
     historyList = new QListView();
     rightLayout->addWidget(historyList);
+    clearButton = new QPushButton("清空历史");
+    clearButton->setStyleSheet("background-color: #ff3b30;"); // 红色按钮
+    rightLayout->addWidget(clearButton);
 
     // 设置左右比例
     mainLayout->addLayout(leftLayout, 3);
@@ -81,6 +87,8 @@ void MainWindow::setupUI()
     QListView { border: 1px solid #ddd; border-radius: 4px; background: white; }
     QLabel { font-weight: bold; color: #333; }
 )");
+
+
 }
 
 void MainWindow::initModel()
@@ -107,23 +115,36 @@ void MainWindow::onSearchClicked() {
 }
 
 void MainWindow::onTranslationFinished(const QString &original, const QString &translated) {
+    // 1. 显示翻译结果
     resultDisplay->setText(translated);
 
-    QString example = QString("Example: This is a sample sentence containing '%1'.\n"
-                              "例句: 这是一个包含“%2”的示例句子。")
-                          .arg(original).arg(translated);
+    // 2. 优化例句生成逻辑：随机模板库
+    QStringList templates = {
+        "The word '%1' is very important in this context.\n(在这个语境下，'%2'这个词非常重要。)",
+        "I don't know how to use '%1' in a sentence.\n(我不知道如何在句子中使用'%2'。)",
+        "Could you please explain the meaning of '%1'?\n(你能解释一下'%2'的意思吗？)",
+        "He wrote the word '%1' on the blackboard.\n(他在黑板上写下了'%2'这个词。)",
+        "Is '%1' a common expression in English?\n('%2'是英语中的常用表达吗？)"
+    };
+    // 根据原文长度或随机数选择模板
+    int index = QRandomGenerator::global()->bounded(templates.size());
+    QString example = templates.at(index).arg(original, translated);
     exampleDisplay->setText(example);
 
-    // 【多线程优化】：使用 QtConcurrent 在子线程中执行数据库写入，不阻塞主线程
-    QtConcurrent::run([original, translated]() {
-        DatabaseManager::instance().addHistory(original, translated);
+    // 3. 多线程写入数据库，并使用 Watcher 监控完成状态
+    auto future = QtConcurrent::run([original, translated]() {
+        return DatabaseManager::instance().addHistory(original, translated);
     });
 
-    // 稍微延迟刷新 Model，确保子线程写入完成（或者你可以用 QFutureWatcher，但大作业这样写最快）
-    QTimer::singleShot(100, this, [this](){
-        historyModel->select();
+    // 创建监听器，当子线程写完后，立刻通知主线程刷新
+    QFutureWatcher<bool> *watcher = new QFutureWatcher<bool>(this);
+    connect(watcher, &QFutureWatcher<bool>::finished, this, [this, watcher]() {
+        historyModel->select(); // 此时数据库一定写完了，刷新必成功
+        watcher->deleteLater();
     });
+    watcher->setFuture(future);
 
+    // 4. 恢复按钮
     searchButton->setEnabled(true);
     searchButton->setText("查询");
 }
@@ -149,4 +170,12 @@ void MainWindow::onHistoryItemClicked(const QModelIndex &index) {
                               "例句: 这是一个包含“%2”的示例句子。")
                           .arg(original).arg(translated);
     exampleDisplay->setText(example);
+}
+
+void MainWindow::onClearClicked() {
+    if (DatabaseManager::instance().clearHistory()) {
+        historyModel->select();
+        resultDisplay->clear();
+        exampleDisplay->clear();
+    }
 }
