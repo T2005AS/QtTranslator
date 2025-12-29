@@ -24,6 +24,7 @@ private slots:
     void onSearchClicked();
     void onTranslationFinished(const QString &original, const QString &translated);
     void onTranslationError(const QString &error);
+    void onHistoryItemClicked(const QModelIndex &index);
 
 private:
     void setupUI();      // 纯代码初始化UI
