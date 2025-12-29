@@ -10,6 +10,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QSqlTableModel>
+#include "translator.h"
 
 class MainWindow : public QMainWindow
 {
@@ -19,8 +20,14 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+private slots:
+    void onSearchClicked();
+    void onTranslationFinished(const QString &original, const QString &translated);
+    void onTranslationError(const QString &error);
+
 private:
     void setupUI();      // 纯代码初始化UI
+    Translator *translator;
 
     // UI 组件声明
     QWidget *centralWidget;
