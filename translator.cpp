@@ -17,7 +17,7 @@ void Translator::translate(const QString &text) {
     QString rawSign = appid + text + salt + secret;
     QByteArray sign = QCryptographicHash::hash(rawSign.toUtf8(), QCryptographicHash::Md5).toHex();
 
-    QUrl url("https://api.fanyi.baidu.com/api/trans/vip/translate");
+    QUrl url("http://api.fanyi.baidu.com/api/trans/vip/translate");
     QUrlQuery query;
     query.addQueryItem("q", text);
     query.addQueryItem("from", "auto");
