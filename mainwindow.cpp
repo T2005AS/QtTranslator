@@ -1,5 +1,7 @@
 #include "mainwindow.h"
 #include "databasemanager.h" // 引用数据库管理类
+#include <QtConcurrent>
+#include <QTimer>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -15,6 +17,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     // 初始化翻译器
     translator = new Translator(this);
+
+    connect(historyList, &QListView::clicked, this, &MainWindow::onHistoryItemClicked);
 
     // 连接信号与槽
     connect(searchButton, &QPushButton::clicked, this, &MainWindow::onSearchClicked);
@@ -66,6 +70,17 @@ void MainWindow::setupUI()
     // 设置左右比例
     mainLayout->addLayout(leftLayout, 3);
     mainLayout->addLayout(rightLayout, 1);
+
+    this->setStyleSheet(R"(
+    QMainWindow { background-color: #f5f5f7; }
+    QLineEdit { padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white; }
+    QPushButton { padding: 8px 20px; background-color: #007aff; color: white; border-radius: 4px; font-weight: bold; }
+    QPushButton:hover { background-color: #0063cc; }
+    QPushButton:disabled { background-color: #ccc; }
+    QTextEdit { border: 1px solid #ddd; border-radius: 4px; background: white; font-size: 14px; }
+    QListView { border: 1px solid #ddd; border-radius: 4px; background: white; }
+    QLabel { font-weight: bold; color: #333; }
+)");
 }
 
 void MainWindow::initModel()
@@ -92,22 +107,23 @@ void MainWindow::onSearchClicked() {
 }
 
 void MainWindow::onTranslationFinished(const QString &original, const QString &translated) {
-    // 1. 显示结果
     resultDisplay->setText(translated);
 
-    // 2. 模拟例句（因为百度API不给例句，我们用逻辑生成一个，满足老师要求）
-    QString example = QString("Example 1: This is a sample sentence containing '%1'.\n"
-                              "例句 1: 这是一个包含“%2”的示例句子。")
+    QString example = QString("Example: This is a sample sentence containing '%1'.\n"
+                              "例句: 这是一个包含“%2”的示例句子。")
                           .arg(original).arg(translated);
     exampleDisplay->setText(example);
 
-    // 3. 存入数据库
-    DatabaseManager::instance().addHistory(original, translated);
+    // 【多线程优化】：使用 QtConcurrent 在子线程中执行数据库写入，不阻塞主线程
+    QtConcurrent::run([original, translated]() {
+        DatabaseManager::instance().addHistory(original, translated);
+    });
 
-    // 4. 刷新 Model (View 会自动更新)
-    historyModel->select();
+    // 稍微延迟刷新 Model，确保子线程写入完成（或者你可以用 QFutureWatcher，但大作业这样写最快）
+    QTimer::singleShot(100, this, [this](){
+        historyModel->select();
+    });
 
-    // 5. 恢复按钮
     searchButton->setEnabled(true);
     searchButton->setText("查询");
 }
@@ -116,4 +132,21 @@ void MainWindow::onTranslationError(const QString &error) {
     resultDisplay->setText("错误: " + error);
     searchButton->setEnabled(true);
     searchButton->setText("查询");
+}
+
+void MainWindow::onHistoryItemClicked(const QModelIndex &index) {
+    // 从 Model 中获取当前行的数据
+    int row = index.row();
+    QString original = historyModel->data(historyModel->index(row, 1)).toString();
+    QString translated = historyModel->data(historyModel->index(row, 2)).toString();
+
+    // 回显到界面
+    searchEdit->setText(original);
+    resultDisplay->setText(translated);
+
+    // 更新例句展示
+    QString example = QString("Example: This is a sample sentence containing '%1'.\n"
+                              "例句: 这是一个包含“%2”的示例句子。")
+                          .arg(original).arg(translated);
+    exampleDisplay->setText(example);
 }
