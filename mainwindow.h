@@ -28,6 +28,7 @@ private slots:
     void onClearClicked();
     void onFavClicked();
     void onFavoriteContextMenu(const QPoint &pos);
+    void onCopyClicked();
 
 private:
     void setupUI();      // 纯代码初始化UI
@@ -38,6 +39,8 @@ private:
     QListView *favoriteList;
     QSqlTableModel *favoriteModel;
     QTabWidget *tabWidget; // 用于切换历史和生词本
+
+    QPushButton *copyButton;
 
     // UI 组件声明
     QWidget *centralWidget;

@@ -4,6 +4,8 @@
 #include <QRandomGenerator>
 #include <QFutureWatcher>
 #include <QMenu>
+#include <QClipboard>
+#include <QGuiApplication>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -28,6 +30,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(translator, &Translator::finished, this, &MainWindow::onTranslationFinished);
     connect(translator, &Translator::errorOccurred, this, &MainWindow::onTranslationError);
     connect(clearButton, &QPushButton::clicked, this, &MainWindow::onClearClicked);
+    connect(copyButton, &QPushButton::clicked, this, &MainWindow::onCopyClicked);
 
     this->setWindowTitle("智能翻译字典 - Qt6.9.2");
     this->resize(800, 600);
@@ -53,6 +56,10 @@ void MainWindow::setupUI()
     searchBarLayout->addWidget(searchEdit);
     searchBarLayout->addWidget(searchButton);
     searchBarLayout->addWidget(favButton); // 新增
+
+    copyButton = new QPushButton("复制结果");
+    copyButton->setFixedWidth(80); // 设置一下宽度
+    searchBarLayout->addWidget(copyButton);
 
     leftLayout->addLayout(searchBarLayout);
     leftLayout->addWidget(new QLabel("翻译结果:"));
@@ -222,4 +229,9 @@ void MainWindow::onFavoriteContextMenu(const QPoint &pos) {
     });
 
     menu.exec(favoriteList->mapToGlobal(pos));
+}
+
+void MainWindow::onCopyClicked() {
+    // 将翻译结果文本框的内容复制到系统剪贴板
+    QGuiApplication::clipboard()->setText(resultDisplay->toPlainText());
 }
