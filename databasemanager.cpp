@@ -10,23 +10,22 @@ bool DatabaseManager::initDatabase() {
     db = QSqlDatabase::addDatabase("QSQLITE");
     db.setDatabaseName("history.db");
 
-    if (!db.open()) {
-        qDebug() << "Error: connection with database fail" << db.lastError().text();
-        return false;
-    }
+    if (!db.open()) return false;
 
     QSqlQuery query;
-    // 创建历史记录表：包含ID，原文，译文，时间戳
-    QString sql = "CREATE TABLE IF NOT EXISTS history ("
-                  "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                  "original_text TEXT, "
-                  "translated_text TEXT, "
-                  "time DATETIME DEFAULT CURRENT_TIMESTAMP)";
+    // 表1：历史记录
+    query.exec("CREATE TABLE IF NOT EXISTS history ("
+               "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+               "original_text TEXT, "
+               "translated_text TEXT, "
+               "time DATETIME DEFAULT CURRENT_TIMESTAMP)");
 
-    if (!query.exec(sql)) {
-        qDebug() << "Create table error:" << query.lastError().text();
-        return false;
-    }
+    // 表2：生词本 (新增)
+    query.exec("CREATE TABLE IF NOT EXISTS favorites ("
+               "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+               "word TEXT UNIQUE, "
+               "translation TEXT, "
+               "added_time DATETIME DEFAULT CURRENT_TIMESTAMP)");
     return true;
 }
 
@@ -35,6 +34,14 @@ bool DatabaseManager::addHistory(const QString &original, const QString &transla
     query.prepare("INSERT INTO history (original_text, translated_text) VALUES (?, ?)");
     query.addBindValue(original);
     query.addBindValue(translated);
+    return query.exec();
+}
+
+bool DatabaseManager::addFavorite(const QString &word, const QString &trans) {
+    QSqlQuery query;
+    query.prepare("INSERT OR REPLACE INTO favorites (word, translation) VALUES (?, ?)");
+    query.addBindValue(word);
+    query.addBindValue(trans);
     return query.exec();
 }
 
