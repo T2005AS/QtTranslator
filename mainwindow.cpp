@@ -1,7 +1,6 @@
 #include "mainwindow.h"
 #include "databasemanager.h" // 引用数据库管理类
 #include <QtConcurrent>
-#include <QTimer>
 #include <QRandomGenerator>
 #include <QFutureWatcher>
 
@@ -91,20 +90,20 @@ void MainWindow::setupUI()
 
 }
 
-void MainWindow::initModel()
-{
+void MainWindow::initModel() {
     historyModel = new QSqlTableModel(this);
     historyModel->setTable("history");
     historyModel->setEditStrategy(QSqlTableModel::OnFieldChange);
-    historyModel->setSort(3, Qt::DescendingOrder); // 按时间倒序排列
-    historyModel->select(); // 查询数据
+    historyModel->setSort(3, Qt::DescendingOrder); // 按时间倒序
 
-    // 将 Model 绑定到 View (historyList)
+    if (!historyModel->select()) {
+        qDebug() << "Model select 失败:" << historyModel->lastError().text();
+    }
+
     historyList->setModel(historyModel);
-
-    // 设置 View 显示哪一列（显示原文列，通常是第1列，0是ID）
-    historyList->setModelColumn(1);
+    historyList->setModelColumn(1); // 必须是 1，显示原文
 }
+
 void MainWindow::onSearchClicked() {
     QString text = searchEdit->text().trimmed();
     if (text.isEmpty()) return;
@@ -118,33 +117,32 @@ void MainWindow::onTranslationFinished(const QString &original, const QString &t
     // 1. 显示翻译结果
     resultDisplay->setText(translated);
 
-    // 2. 优化例句生成逻辑：随机模板库
-    QStringList templates = {
-        "The word '%1' is very important in this context.\n(在这个语境下，'%2'这个词非常重要。)",
-        "I don't know how to use '%1' in a sentence.\n(我不知道如何在句子中使用'%2'。)",
-        "Could you please explain the meaning of '%1'?\n(你能解释一下'%2'的意思吗？)",
-        "He wrote the word '%1' on the blackboard.\n(他在黑板上写下了'%2'这个词。)",
-        "Is '%1' a common expression in English?\n('%2'是英语中的常用表达吗？)"
-    };
-    // 根据原文长度或随机数选择模板
-    int index = QRandomGenerator::global()->bounded(templates.size());
-    QString example = templates.at(index).arg(original, translated);
-    exampleDisplay->setText(example);
+    // 2. 【多线程模块】：在子线程中生成随机例句（满足老师要求）
+    QtConcurrent::run([this, original, translated]() {
+        QStringList templates = {
+            "The word '%1' is very important in this context.\n(在这个语境下，'%2'这个词非常重要。)",
+            "I don't know how to use '%1' in a sentence.\n(我不知道如何在句子中使用'%2'。)",
+            "Could you please explain the meaning of '%1'?\n(你能解释一下'%2'的意思吗？)",
+            "He wrote the word '%1' on the blackboard.\n(他在黑板上写下了'%2'这个词。)",
+            "Is '%1' a common expression in English?\n('%2'是英语中的常用表达吗？)"
+        };
+        int index = QRandomGenerator::global()->bounded(templates.size());
+        QString example = templates.at(index).arg(original, translated);
 
-    // 3. 多线程写入数据库，并使用 Watcher 监控完成状态
-    auto future = QtConcurrent::run([original, translated]() {
-        return DatabaseManager::instance().addHistory(original, translated);
+        // 使用 invokeMethod 安全地回到主线程更新 UI
+        QMetaObject::invokeMethod(this, [this, example](){
+            exampleDisplay->setText(example);
+        }, Qt::QueuedConnection);
     });
 
-    // 创建监听器，当子线程写完后，立刻通知主线程刷新
-    QFutureWatcher<bool> *watcher = new QFutureWatcher<bool>(this);
-    connect(watcher, &QFutureWatcher<bool>::finished, this, [this, watcher]() {
-        historyModel->select(); // 此时数据库一定写完了，刷新必成功
-        watcher->deleteLater();
-    });
-    watcher->setFuture(future);
+    // 3. 【数据库模块】：在主线程写入数据库（确保线程安全且 Model 立即刷新）
+    if (DatabaseManager::instance().addHistory(original, translated)) {
+        historyModel->select(); // 刷新左侧列表
+    } else {
+        qDebug() << "数据库写入失败";
+    }
 
-    // 4. 恢复按钮
+    // 4. 恢复按钮状态
     searchButton->setEnabled(true);
     searchButton->setText("查询");
 }
