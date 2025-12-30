@@ -1,5 +1,0 @@
-D:/qt6/codecodecode/QtTranslator/build/Desktop_Qt_6_9_2_MinGW_64_bit-Debug/CMakeFiles/QtTranslator.dir
-D:/qt6/codecodecode/QtTranslator/build/Desktop_Qt_6_9_2_MinGW_64_bit-Debug/CMakeFiles/edit_cache.dir
-D:/qt6/codecodecode/QtTranslator/build/Desktop_Qt_6_9_2_MinGW_64_bit-Debug/CMakeFiles/rebuild_cache.dir
-D:/qt6/codecodecode/QtTranslator/build/Desktop_Qt_6_9_2_MinGW_64_bit-Debug/CMakeFiles/QtTranslator_autogen_timestamp_deps.dir
-D:/qt6/codecodecode/QtTranslator/build/Desktop_Qt_6_9_2_MinGW_64_bit-Debug/CMakeFiles/QtTranslator_autogen.dir
