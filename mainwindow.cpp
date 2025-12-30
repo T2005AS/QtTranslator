@@ -3,6 +3,7 @@
 #include <QtConcurrent>
 #include <QRandomGenerator>
 #include <QFutureWatcher>
+#include <QMenu>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -39,18 +40,19 @@ void MainWindow::setupUI()
     centralWidget = new QWidget(this);
     setCentralWidget(centralWidget);
 
-    // 主布局：水平布局（左边查词，右边历史记录）
     QHBoxLayout *mainLayout = new QHBoxLayout(centralWidget);
-
-    // 左侧查询区域布局
     QVBoxLayout *leftLayout = new QVBoxLayout();
 
+    // 搜索栏增加收藏按钮
     QHBoxLayout *searchBarLayout = new QHBoxLayout();
     searchEdit = new QLineEdit();
-    searchEdit->setPlaceholderText("请输入要查询的单词或句子...");
     searchButton = new QPushButton("查询");
+    favButton = new QPushButton("收藏"); // 新增
+    favButton->setFixedWidth(60);
+
     searchBarLayout->addWidget(searchEdit);
     searchBarLayout->addWidget(searchButton);
+    searchBarLayout->addWidget(favButton); // 新增
 
     leftLayout->addLayout(searchBarLayout);
     leftLayout->addWidget(new QLabel("翻译结果:"));
@@ -63,45 +65,56 @@ void MainWindow::setupUI()
     exampleDisplay->setReadOnly(true);
     leftLayout->addWidget(exampleDisplay);
 
-    // 右侧历史记录区域
-    QVBoxLayout *rightLayout = new QVBoxLayout();
-    rightLayout->addWidget(new QLabel("搜索历史:"));
+    // 右侧改为页签布局（双表展示）
+    tabWidget = new QTabWidget();
     historyList = new QListView();
-    rightLayout->addWidget(historyList);
+    favoriteList = new QListView();
+    favoriteList->setContextMenuPolicy(Qt::CustomContextMenu);
+
+    tabWidget->addTab(historyList, "历史记录");
+    tabWidget->addTab(favoriteList, "生词本");
+
+    QVBoxLayout *rightLayout = new QVBoxLayout();
+    rightLayout->addWidget(new QLabel("数据管理:"));
+    rightLayout->addWidget(tabWidget);
+
     clearButton = new QPushButton("清空历史");
-    clearButton->setStyleSheet("background-color: #ff3b30;"); // 红色按钮
+    clearButton->setStyleSheet("background-color: #ff3b30; color: white;");
     rightLayout->addWidget(clearButton);
 
-    // 设置左右比例
     mainLayout->addLayout(leftLayout, 3);
     mainLayout->addLayout(rightLayout, 1);
 
+    // 样式表更新
     this->setStyleSheet(R"(
-    QMainWindow { background-color: #f5f5f7; }
-    QLineEdit { padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white; }
-    QPushButton { padding: 8px 20px; background-color: #007aff; color: white; border-radius: 4px; font-weight: bold; }
-    QPushButton:hover { background-color: #0063cc; }
-    QPushButton:disabled { background-color: #ccc; }
-    QTextEdit { border: 1px solid #ddd; border-radius: 4px; background: white; font-size: 14px; }
-    QListView { border: 1px solid #ddd; border-radius: 4px; background: white; }
-    QLabel { font-weight: bold; color: #333; }
-)");
-
-
+        QMainWindow { background-color: #f5f5f7; }
+        QLineEdit { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        QPushButton { padding: 8px; background-color: #007aff; color: white; border-radius: 4px; }
+        QTabWidget::pane { border: 1px solid #ddd; }
+        QTabBar::tab { padding: 8px 20px; }
+    )");
 }
 
 void MainWindow::initModel() {
+    // 历史记录模型
     historyModel = new QSqlTableModel(this);
     historyModel->setTable("history");
-    historyModel->setEditStrategy(QSqlTableModel::OnFieldChange);
-    historyModel->setSort(3, Qt::DescendingOrder); // 按时间倒序
-
-    if (!historyModel->select()) {
-        qDebug() << "Model select 失败:" << historyModel->lastError().text();
-    }
-
+    historyModel->setSort(3, Qt::DescendingOrder);
+    historyModel->select();
     historyList->setModel(historyModel);
-    historyList->setModelColumn(1); // 必须是 1，显示原文
+    historyList->setModelColumn(1);
+
+    // 生词本模型 (第二张表)
+    favoriteModel = new QSqlTableModel(this);
+    favoriteModel->setTable("favorites");
+    favoriteModel->select();
+    favoriteList->setModel(favoriteModel);
+    favoriteList->setModelColumn(1);
+
+    // 连接收藏按钮信号
+    connect(favButton, &QPushButton::clicked, this, &MainWindow::onFavClicked);
+     // 连接右键取消收藏按钮信号
+    connect(favoriteList, &QListView::customContextMenuRequested, this, &MainWindow::onFavoriteContextMenu);
 }
 
 void MainWindow::onSearchClicked() {
@@ -176,4 +189,34 @@ void MainWindow::onClearClicked() {
         resultDisplay->clear();
         exampleDisplay->clear();
     }
+}
+
+void MainWindow::onFavClicked() {
+    QString word = searchEdit->text().trimmed();
+    QString trans = resultDisplay->toPlainText().trimmed();
+
+    if (!word.isEmpty() && !trans.isEmpty()) {
+        if (DatabaseManager::instance().addFavorite(word, trans)) {
+            favoriteModel->select(); // 刷新生词本列表
+        }
+    }
+}
+
+void MainWindow::onFavoriteContextMenu(const QPoint &pos) {
+    QModelIndex index = favoriteList->indexAt(pos);
+    if (!index.isValid()) return;
+
+    QMenu menu(this);
+    QAction *deleteAction = menu.addAction("从生词本删除");
+
+    // 获取选中的单词原文
+    QString word = favoriteModel->data(favoriteModel->index(index.row(), 1)).toString();
+
+    connect(deleteAction, &QAction::triggered, this, [this, word]() {
+        if (DatabaseManager::instance().removeFavorite(word)) {
+            favoriteModel->select(); // 刷新列表
+        }
+    });
+
+    menu.exec(favoriteList->mapToGlobal(pos));
 }

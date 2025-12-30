@@ -49,3 +49,10 @@ bool DatabaseManager::clearHistory() {
     QSqlQuery query;
     return query.exec("DELETE FROM history");
 }
+
+bool DatabaseManager::removeFavorite(const QString &word) {
+    QSqlQuery query;
+    query.prepare("DELETE FROM favorites WHERE word = ?");
+    query.addBindValue(word);
+    return query.exec();
+}

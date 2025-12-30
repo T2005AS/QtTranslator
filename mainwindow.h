@@ -26,11 +26,18 @@ private slots:
     void onTranslationError(const QString &error);
     void onHistoryItemClicked(const QModelIndex &index);
     void onClearClicked();
+    void onFavClicked();
+    void onFavoriteContextMenu(const QPoint &pos);
 
 private:
     void setupUI();      // 纯代码初始化UI
     Translator *translator;
     QPushButton *clearButton;
+
+    QPushButton *favButton;
+    QListView *favoriteList;
+    QSqlTableModel *favoriteModel;
+    QTabWidget *tabWidget; // 用于切换历史和生词本
 
     // UI 组件声明
     QWidget *centralWidget;
