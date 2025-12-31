@@ -5,38 +5,29 @@
 #include <QJsonArray>
 #include <QUrlQuery>
 #include <QRandomGenerator>
-#include <QDebug>
 #include <QRegularExpression>
 
 Translator::Translator(QObject *parent) : QObject(parent) {
     manager = new QNetworkAccessManager(this);
 }
 
-
 void Translator::translate(const QString &text) {
     QString salt = QString::number(QRandomGenerator::global()->generate());
 
-    // --- 改进的语言检测逻辑 ---
+    // 检测中文逻辑
     bool hasChinese = false;
     for (const QChar &ch : text) {
-        // 中文字符的 Unicode 范围通常在 0x4E00 到 0x9FA5
         if (ch.unicode() >= 0x4E00 && ch.unicode() <= 0x9FA5) {
             hasChinese = true;
             break;
         }
     }
-
-    // 如果有中文，目标语言设为英文(en)，否则设为中文(zh)
     QString toLang = hasChinese ? "en" : "zh";
 
-    // 调试信息：在 Qt Creator 底部的“应用程序输出”可以看到
-    qDebug() << "输入内容:" << text << " 检测到中文:" << hasChinese << " 目标语言:" << toLang;
-
-    // --- 签名计算 ---
+    // 百度翻译请求
     QString rawSign = appid + text + salt + secret;
     QByteArray sign = QCryptographicHash::hash(rawSign.toUtf8(), QCryptographicHash::Md5).toHex();
 
-    // --- 构造请求 ---
     QUrl url("http://api.fanyi.baidu.com/api/trans/vip/translate");
     QUrlQuery query;
     query.addQueryItem("q", text);
@@ -45,63 +36,82 @@ void Translator::translate(const QString &text) {
     query.addQueryItem("appid", appid);
     query.addQueryItem("salt", salt);
     query.addQueryItem("sign", sign);
-
     url.setQuery(query);
-    QNetworkRequest request(url);
 
+    QNetworkRequest request(url);
     QNetworkReply *reply = manager->get(request);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, text]() {
+
+    // 连接到具体的槽函数，解决 undefined reference 报错
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         onReplyFinished(reply);
     });
 }
 
 void Translator::onReplyFinished(QNetworkReply *reply) {
-    if (reply->error() == QNetworkReply::NoError) {
+    if (reply->error() != QNetworkReply::NoError) {
+        emit errorOccurred("网络错误: " + reply->errorString());
+    } else {
         QByteArray data = reply->readAll();
-        QJsonDocument doc = QJsonDocument::fromJson(data);
-        QJsonObject obj = doc.object();
+        QJsonObject obj = QJsonDocument::fromJson(data).object();
 
-        if (!obj.contains("error_code")) {
+        if (obj.contains("error_code")) {
+            emit errorOccurred(obj["error_msg"].toString());
+        } else {
             QJsonArray results = obj["trans_result"].toArray();
             if (!results.isEmpty()) {
                 QString translated = results.at(0).toObject()["dst"].toString();
                 QString original = results.at(0).toObject()["src"].toString();
+
+                // 1. 发送翻译结果信号
                 emit finished(original, translated);
 
-                // --- 新增：如果是英文单词，去抓取真实例句 ---
-                // 简单判断：如果不包含中文，就认为是英文单词
-                if (!original.contains(QRegularExpression("[\\x4e00-\\x9fa5]"))) {
-                    QUrl exUrl("https://api.dictionaryapi.dev/api/v2/entries/en/" + original);
-                    QNetworkReply *exReply = manager->get(QNetworkRequest(exUrl));
-                    connect(exReply, &QNetworkReply::finished, this, [this, exReply]() {
-                        if (exReply->error() == QNetworkReply::NoError) {
-                            QJsonDocument exDoc = QJsonDocument::fromJson(exReply->readAll());
-                            QJsonArray exArr = exDoc.array();
-                            QString allEx;
-                            if (!exArr.isEmpty()) {
-                                // 解析 JSON 获取第一个例句
-                                QJsonArray meanings = exArr.at(0).toObject()["meanings"].toArray();
-                                for(int i=0; i<meanings.size(); ++i) {
-                                    QJsonArray defs = meanings.at(i).toObject()["definitions"].toArray();
-                                    for(int j=0; j<defs.size(); ++j) {
-                                        QString ex = defs.at(j).toObject()["example"].toString();
-                                        if(!ex.isEmpty()) {
-                                            allEx += "• " + ex + "\n";
-                                            if(allEx.split("\n").size() > 3) break; // 只取前3条
-                                        }
-                                    }
-                                }
-                            }
-                            if (allEx.isEmpty()) allEx = "No real-world examples found for this word.";
-                            emit examplesReady(allEx);
-                        }
-                        exReply->deleteLater();
-                    });
+                // 2. 智能例句逻辑：无论搜中还是英，都找其中的英文部分去查例句
+                auto isChinese = [](const QString &t) {
+                    for (const QChar &ch : t) {
+                        if (ch.unicode() >= 0x4E00 && ch.unicode() <= 0x9FA5) return true;
+                    }
+                    return false;
+                };
+
+                if (!isChinese(original)) {
+                    // 输入的是英文，直接查原文例句
+                    fetchRealExamples(original);
+                } else if (!isChinese(translated)) {
+                    // 输入的是中文，查翻译出来的英文结果的例句
+                    fetchRealExamples(translated);
                 } else {
-                    emit examplesReady("中文查询暂不提供实时例句。");
+                    emit examplesReady("暂无可用英文例句。");
                 }
             }
         }
     }
     reply->deleteLater();
+}
+
+void Translator::fetchRealExamples(const QString &word) {
+    QUrl url("https://api.dictionaryapi.dev/api/v2/entries/en/" + word);
+    QNetworkReply *reply = manager->get(QNetworkRequest(url));
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        if (reply->error() == QNetworkReply::NoError) {
+            QJsonArray arr = QJsonDocument::fromJson(reply->readAll()).array();
+            if (!arr.isEmpty()) {
+                QString exText;
+                QJsonArray meanings = arr.at(0).toObject()["meanings"].toArray();
+                for(int i=0; i<meanings.size(); ++i) {
+                    QJsonArray defs = meanings.at(i).toObject()["definitions"].toArray();
+                    for(int j=0; j<defs.size(); ++j) {
+                        QString ex = defs.at(j).toObject()["example"].toString();
+                        if(!ex.isEmpty()) {
+                            exText += "• " + ex + "\n";
+                            if(exText.count('\n') >= 3) break;
+                        }
+                    }
+                }
+                emit examplesReady(exText.isEmpty() ? "No real examples found." : exText);
+            }
+        } else {
+            emit examplesReady("Real-time examples unavailable.");
+        }
+        reply->deleteLater();
+    });
 }
