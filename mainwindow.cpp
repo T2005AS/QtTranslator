@@ -117,14 +117,41 @@ void MainWindow::onSearchClicked() {
 }
 
 void MainWindow::onTranslationFinished(const QString &original, const QString &translated) {
+    // 1. 显示翻译结果
     resultDisplay->setText(translated);
+    statusBar()->showMessage("查询成功", 2000);
+
+    // 2. 【多线程模块】：生成 11 个随机中英对照例句
     QtConcurrent::run([this, original, translated]() {
-        QStringList templates = {"The word '%1' means '%2'.", "Use '%1' in a sentence.", "Explain '%1'."};
-        QString example = templates.at(QRandomGenerator::global()->bounded(templates.size())).arg(original, translated);
-        QMetaObject::invokeMethod(this, [this, example](){ exampleDisplay->setText(example); });
+        QStringList templates = {
+            "The word '%1' is very important in this context.\n(在这个语境下，'%2'这个词非常重要。)",
+            "I don't know how to use '%1' in a sentence.\n(我不知道如何在句子中使用'%2'。)",
+            "Could you please explain the meaning of '%1'?\n(你能解释一下'%2'的意思吗？)",
+            "He wrote the word '%1' on the blackboard.\n(他在黑板上写下了'%2'这个词。)",
+            "Is '%1' a common expression in English?\n('%2'是英语中的常用表达吗？)",
+            "I found the definition of '%1' in the dictionary.\n(我在字典里找到了'%2'的定义。)",
+            "The translation of '%1' can vary depending on the situation.\n('%2'的翻译可能会根据情况而有所不同。)",
+            "Please repeat the word '%1' after me.\n(请跟我重复'%2'这个词。)",
+            "She struggled to pronounce '%1' correctly.\n(她很难准确地读出'%2'的发音。)",
+            "You should pay attention to the spelling of '%1'.\n(你应该注意'%2'的拼写。)",
+            "This sentence is a perfect example of how to use '%1'.\n(这个句子是说明如何使用'%2'的完美例子。)"
+        };
+
+        int index = QRandomGenerator::global()->bounded(templates.size());
+        QString example = templates.at(index).arg(original, translated);
+
+        // 回到主线程更新 UI
+        QMetaObject::invokeMethod(this, [this, example](){
+            exampleDisplay->setText(example);
+        }, Qt::QueuedConnection);
     });
-    DatabaseManager::instance().addHistory(original, translated);
-    historyModel->select();
+
+    // 3. 【数据库模块】：写入历史记录
+    if (DatabaseManager::instance().addHistory(original, translated)) {
+        historyModel->select();
+    }
+
+    // 4. 恢复按钮状态
     searchButton->setEnabled(true);
 }
 
