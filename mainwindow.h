@@ -10,6 +10,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QSqlTableModel>
+#include <QTabWidget>
 #include "translator.h"
 
 class MainWindow : public QMainWindow
@@ -29,27 +30,30 @@ private slots:
     void onFavClicked();
     void onFavoriteContextMenu(const QPoint &pos);
     void onCopyClicked();
+    void onAboutClicked(); // 第19次新增
 
 private:
-    void setupUI();      // 纯代码初始化UI
-    Translator *translator;
-    QPushButton *clearButton;
+    void setupUI();
+    void initModel();
 
-    QPushButton *favButton;
-    QListView *favoriteList;
-    QSqlTableModel *favoriteModel;
-    QTabWidget *tabWidget; // 用于切换历史和生词本
-
-    QPushButton *copyButton;
-
-    // UI 组件声明
     QWidget *centralWidget;
     QLineEdit *searchEdit;
     QPushButton *searchButton;
+    QPushButton *favButton;
+    QPushButton *copyButton;
+    QPushButton *resetButton; // 第18次新增
+    QPushButton *aboutButton; // 第19次新增
+    QPushButton *clearButton;
+
     QTextEdit *resultDisplay;
-    QListView *historyList;
     QTextEdit *exampleDisplay;
+
+    QTabWidget *tabWidget;
+    QListView *historyList;
+    QListView *favoriteList;
+
     QSqlTableModel *historyModel;
-    void initModel(); // 新增初始化模型的方法
+    QSqlTableModel *favoriteModel;
+    Translator *translator;
 };
 #endif // MAINWINDOW_H
