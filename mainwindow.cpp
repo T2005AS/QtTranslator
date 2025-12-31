@@ -26,6 +26,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(copyButton, &QPushButton::clicked, this, &MainWindow::onCopyClicked);
     connect(resetButton, &QPushButton::clicked, searchEdit, &QLineEdit::clear); // 第18次
     connect(aboutButton, &QPushButton::clicked, this, &MainWindow::onAboutClicked); // 第19次
+    connect(helpButton, &QPushButton::clicked, this, &MainWindow::onHelpClicked);
 
     this->setWindowTitle("智能翻译字典 - Qt6.9.2");
     this->resize(800, 600);
@@ -47,6 +48,9 @@ void MainWindow::setupUI() {
     copyButton = new QPushButton("复制");
     resetButton = new QPushButton("重置"); // 第18次
     aboutButton = new QPushButton("关于"); // 第19次
+    helpButton = new QPushButton("帮助");
+    helpButton->setFixedWidth(60);
+    searchBarLayout->addWidget(helpButton);
 
     searchBarLayout->addWidget(searchEdit);
     searchBarLayout->addWidget(searchButton);
@@ -162,4 +166,8 @@ void MainWindow::onCopyClicked() {
 
 void MainWindow::onAboutClicked() {
     QMessageBox::about(this, "关于", "Qt智能翻译助手 v1.0\n作者: T2005AS");
+}
+
+void MainWindow::onHelpClicked() {
+    QMessageBox::information(this, "使用帮助", "1. 输入文字点击查询即可翻译\n2. 点击收藏可存入生词本\n3. 右键生词本条目可删除");
 }

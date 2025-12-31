@@ -31,6 +31,7 @@ private slots:
     void onFavoriteContextMenu(const QPoint &pos);
     void onCopyClicked();
     void onAboutClicked(); // 第19次新增
+    void onHelpClicked();
 
 private:
     void setupUI();
@@ -44,6 +45,7 @@ private:
     QPushButton *resetButton; // 第18次新增
     QPushButton *aboutButton; // 第19次新增
     QPushButton *clearButton;
+    QPushButton *helpButton;
 
     QTextEdit *resultDisplay;
     QTextEdit *exampleDisplay;
