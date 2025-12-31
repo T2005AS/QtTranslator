@@ -14,6 +14,8 @@ public:
 signals:
     void finished(const QString &original, const QString &translated);
     void errorOccurred(const QString &error);
+    // 在 signals: 下方添加
+    void examplesReady(const QString &examples);
 
 private slots:
     void onReplyFinished(QNetworkReply *reply);

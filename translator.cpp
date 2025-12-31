@@ -56,21 +56,50 @@ void Translator::translate(const QString &text) {
 }
 
 void Translator::onReplyFinished(QNetworkReply *reply) {
-    if (reply->error() != QNetworkReply::NoError) {
-        emit errorOccurred(reply->errorString());
-    } else {
+    if (reply->error() == QNetworkReply::NoError) {
         QByteArray data = reply->readAll();
         QJsonDocument doc = QJsonDocument::fromJson(data);
         QJsonObject obj = doc.object();
 
-        if (obj.contains("error_code")) {
-            emit errorOccurred(obj["error_msg"].toString());
-        } else {
+        if (!obj.contains("error_code")) {
             QJsonArray results = obj["trans_result"].toArray();
             if (!results.isEmpty()) {
                 QString translated = results.at(0).toObject()["dst"].toString();
                 QString original = results.at(0).toObject()["src"].toString();
                 emit finished(original, translated);
+
+                // --- 新增：如果是英文单词，去抓取真实例句 ---
+                // 简单判断：如果不包含中文，就认为是英文单词
+                if (!original.contains(QRegularExpression("[\\x4e00-\\x9fa5]"))) {
+                    QUrl exUrl("https://api.dictionaryapi.dev/api/v2/entries/en/" + original);
+                    QNetworkReply *exReply = manager->get(QNetworkRequest(exUrl));
+                    connect(exReply, &QNetworkReply::finished, this, [this, exReply]() {
+                        if (exReply->error() == QNetworkReply::NoError) {
+                            QJsonDocument exDoc = QJsonDocument::fromJson(exReply->readAll());
+                            QJsonArray exArr = exDoc.array();
+                            QString allEx;
+                            if (!exArr.isEmpty()) {
+                                // 解析 JSON 获取第一个例句
+                                QJsonArray meanings = exArr.at(0).toObject()["meanings"].toArray();
+                                for(int i=0; i<meanings.size(); ++i) {
+                                    QJsonArray defs = meanings.at(i).toObject()["definitions"].toArray();
+                                    for(int j=0; j<defs.size(); ++j) {
+                                        QString ex = defs.at(j).toObject()["example"].toString();
+                                        if(!ex.isEmpty()) {
+                                            allEx += "• " + ex + "\n";
+                                            if(allEx.split("\n").size() > 3) break; // 只取前3条
+                                        }
+                                    }
+                                }
+                            }
+                            if (allEx.isEmpty()) allEx = "No real-world examples found for this word.";
+                            emit examplesReady(allEx);
+                        }
+                        exReply->deleteLater();
+                    });
+                } else {
+                    emit examplesReady("中文查询暂不提供实时例句。");
+                }
             }
         }
     }
