@@ -14,13 +14,14 @@ public:
 signals:
     void finished(const QString &original, const QString &translated);
     void errorOccurred(const QString &error);
-    // 在 signals: 下方添加
     void examplesReady(const QString &examples);
 
 private slots:
     void onReplyFinished(QNetworkReply *reply);
 
 private:
+    void fetchRealExamples(const QString &word);
+    void translateExample(const QString &englishEx); // 新增：专门翻译例句
     QNetworkAccessManager *manager;
     const QString appid = "20251229002529367";
     const QString secret = "y3U9hBwmtRnohAS9bk33";

@@ -120,16 +120,13 @@ void MainWindow::onSearchClicked() {
 }
 
 void MainWindow::onTranslationFinished(const QString &original, const QString &translated) {
-    // 1. 显示翻译结果
     resultDisplay->setText(translated);
     statusBar()->showMessage("查询成功", 2000);
 
-    // 3. 【数据库模块】：写入历史记录
+    // 存入数据库并刷新列表
     if (DatabaseManager::instance().addHistory(original, translated)) {
         historyModel->select();
     }
-
-    // 4. 恢复按钮状态
     searchButton->setEnabled(true);
 }
 
